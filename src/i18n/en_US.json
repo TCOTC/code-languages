@@ -1,0 +1,5 @@
+{
+  "onload": "Plugin enabled",
+  "onunload": "Plugin disabled",
+  "uninstall": "Plugin uninstalled"
+}

@@ -1,0 +1,18 @@
+// .protyle-util > [data-id="codeLanguage"] > .b3-list {
+//   display: flex;
+//   flex-direction: column;
+//   scrollbar-gutter: stable;
+
+//   .b3-list-item {
+//     padding-right: 0;
+//     margin-right: 0;
+//   }
+
+//   .b3-list-item:not([data-type="match"]) {
+//     display: none;
+//   }
+
+//   .b3-list-item:is([data-id="clear"], [data-id="css"], [data-id="js"]) {
+//     display: flex;
+//   }
+// }
