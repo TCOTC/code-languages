@@ -1,0 +1,34 @@
+{
+  "name": "code-languages",
+  "author": "TCOTC",
+  "url": "https://github.com/TCOTC/code-languages",
+  "version": "0.0.1",
+  "minAppVersion": "3.2.1",
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "all"
+  ],
+  "displayName": {
+    "default": "Code Languages Manager",
+    "zh_CN": "代码语言管理器"
+  },
+  "description": {
+    "default": "Code languages sort, add, delete, etc.",
+    "zh_CN": "代码语言排序、新增、删除等功能"
+  },
+  "readme": {
+    "default": "README.md",
+    "zh_CN": "README_zh_CN.md"
+  },
+  "funding": {
+    "custom": [
+      "https://bento.me/jeffff"
+    ]
+  },
+  "keywords": [
+    "代码块",
+    "Code Block"
+  ]
+}
