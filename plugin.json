@@ -2,8 +2,8 @@
   "name": "code-languages",
   "author": "TCOTC",
   "url": "https://github.com/TCOTC/code-languages",
-  "version": "0.0.1",
-  "minAppVersion": "3.2.1",
+  "version": "0.1.0",
+  "minAppVersion": "3.3.0",
   "backends": [
     "all"
   ],
