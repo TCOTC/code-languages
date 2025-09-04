@@ -2,7 +2,7 @@ import {IProtyle, Plugin, Setting} from "siyuan";
 import "./index.scss";
 
 const STORAGE_NAME = "code-languages-config.json";
-export default class PluginSample extends Plugin {
+export default class CodeLanguagesPlugin extends Plugin {
     async onload() {
         // 加载配置
         await this.loadData(STORAGE_NAME);

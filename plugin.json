@@ -10,6 +10,7 @@
   "frontends": [
     "all"
   ],
+  "disabledInPublish": true,
   "displayName": {
     "default": "Code Languages Manager",
     "zh_CN": "代码语言管理器"
@@ -29,6 +30,6 @@
   },
   "keywords": [
     "代码块",
-    "Code Block"
+    "Code Blocks"
   ]
 }
