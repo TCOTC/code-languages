@@ -1,4 +1,4 @@
-import {IProtyle, Plugin, Setting} from "siyuan";
+import {IProtyle, Plugin, Setting, Constants} from "siyuan";
 import "./index.scss";
 
 const CONFIG_NAME = "code-languages-config.json";
@@ -34,7 +34,7 @@ export default class CodeLanguagesPlugin extends Plugin {
         this.statistics = this.data[STATISTICS_NAME] ||= {} as Statistics;
         
         // 默认配置
-        this.config.sortMode ||= 'custom';
+        this.config.sortMode ||= 'frequency';
         this.config.customOrder ||= '';
         this.config.frequencyTopCount ||= 5;
         this.config.frequencyDaysRange ||= 30;
@@ -183,14 +183,14 @@ export default class CodeLanguagesPlugin extends Plugin {
         const hljsLanguages = (window as any).hljs?.listLanguages() ?? [];
         
         // 获取思源笔记的别名语言列表
-        const aliasLanguages = (window as any).Constants?.ALIAS_CODE_LANGUAGES ?? [];
+        const siyuanAliasLanguages = Constants.ALIAS_CODE_LANGUAGES ?? [];
         
-        return [...aliasLanguages, ...hljsLanguages].sort();
+        return [...siyuanAliasLanguages, ...hljsLanguages].sort();
     }
 
     // 代码语言列表更新
     private languageUpdate = (event: CustomEvent<{ languages: string[], type: string }>) => {
-        console.log("code-language-update", event.detail);
+        // console.log("code-language-update", event.detail);
         const { languages } = event.detail;
         
         // 清理过期统计数据
@@ -201,23 +201,26 @@ export default class CodeLanguagesPlugin extends Plugin {
         const otherCustomLanguages = this.parseLanguagesInput(this.config.otherCustomLanguages);
         const excludedLanguages = this.parseLanguagesInput(this.config.excludedLanguages);
         
-        // 获取内置语言列表
-        const builtinLanguages = this.getBuiltinLanguages();
+        // // 获取内置语言列表
+        // const builtinLanguages = this.getBuiltinLanguages();
         
         // 过滤掉被剔除的内置语言
-        const availableBuiltinLanguages = builtinLanguages.filter(lang => !excludedLanguages.includes(lang));
+        // const availableBuiltinLanguages = builtinLanguages.filter(lang => !excludedLanguages.includes(lang));
+        const availableBuiltinLanguages = languages.filter(lang => !excludedLanguages.includes(lang));
         
         let sortedLanguages: string[] = [];
         
         if (this.config.sortMode === 'custom') {
-            // 自定义顺序模式
+            // 自定义排序模式
             sortedLanguages = [
-                ...customOrderLanguages.filter(lang => languages.includes(lang)),
-                ...otherCustomLanguages.filter(lang => languages.includes(lang) && !customOrderLanguages.includes(lang)),
-                ...availableBuiltinLanguages.filter(lang => languages.includes(lang) && !customOrderLanguages.includes(lang) && !otherCustomLanguages.includes(lang))
+                ...customOrderLanguages,
+                ...[
+                    ...otherCustomLanguages.filter(lang => !customOrderLanguages.includes(lang)),
+                    ...languages.filter(lang => !customOrderLanguages.includes(lang) && !otherCustomLanguages.includes(lang) && !excludedLanguages.includes(lang)),
+                ].sort(),
             ];
         } else {
-            // 频率排序模式
+            // 按频率排序模式
             const frequency = this.calculateLanguageFrequency();
             
             // 按频率排序，取前 N 个
@@ -257,18 +260,15 @@ export default class CodeLanguagesPlugin extends Plugin {
 
     // 代码块语言变更
     private languageChange = (event: CustomEvent<{ language: string, languageElements: HTMLElement[], protyle: IProtyle }>) => {
-        console.log("code-language-change", event);
-        const { language, languageElements } = event.detail;
-        const oldLanguage = languageElements[0].textContent;
+        // console.log("code-language-change", event);
+        const { language } = event.detail;
         
         // 记录语言使用频率
         if (language && language.trim()) {
             const currentDate = this.getCurrentDateString();
             
             // 初始化语言统计数据
-            if (!this.statistics[language]) {
-                this.statistics[language] = {};
-            }
+            this.statistics[language] ||= {};
             
             // 增加当天使用次数
             this.statistics[language][currentDate] = (this.statistics[language][currentDate] || 0) + 1;
@@ -276,9 +276,6 @@ export default class CodeLanguagesPlugin extends Plugin {
             // 保存统计数据
             this.saveData(STATISTICS_NAME, this.statistics);
         }
-        
-        // 执行相应的操作
-        console.log(`代码语言从 ${oldLanguage} 更改为: ${language}`);
     }
 
     public openSetting() {
