@@ -14,10 +14,19 @@ interface Config {
     excludedLanguages: string;  // 剔除的内置语言,逗号分隔
 }
 
+// 语言统计数据结构
+interface LanguageStats {
+    totalCount: number; // 总使用次数
+    dates: { // 按日期统计
+        [date: string]: number; // 格式: "2025-10-25": 5
+    }
+}
+
 // 统计数据结构
 interface Statistics {
-    [language: string]: { // 语言名称
-        [date: string]: number; // 格式: "2025-10-25": 5
+    frequencyOrder: string[]; // 语言频率排序数组
+    languages: { // 语言统计数据
+        [language: string]: LanguageStats;
     }
 }
 
@@ -31,7 +40,12 @@ export default class CodeLanguagesPlugin extends Plugin {
         await this.loadData(CONFIG_NAME);
         await this.loadData(STATISTICS_NAME);
         this.config = this.data[CONFIG_NAME] ||= {} as Config;
-        this.statistics = this.data[STATISTICS_NAME] ||= {} as Statistics;
+        
+        // 初始化统计数据
+        this.statistics = this.data[STATISTICS_NAME] || {
+            frequencyOrder: [],
+            languages: {}
+        };
         
         // 默认配置
         this.config.sortMode ||= 'frequency';
@@ -138,37 +152,58 @@ export default class CodeLanguagesPlugin extends Plugin {
         const cutoffDate = new Date(currentDate.getTime() - this.config.frequencyDaysRange * 24 * 60 * 60 * 1000);
         const cutoffDateString = cutoffDate.toISOString().split('T')[0];
 
-        for (const language in this.statistics) {
-            const languageStats = this.statistics[language];
-            for (const date in languageStats) {
+        const languagesToRemove: string[] = [];
+        
+        for (const language in this.statistics.languages) {
+            const languageStats = this.statistics.languages[language];
+            let totalCount = 0;
+            
+            // 清理过期日期数据
+            for (const date in languageStats.dates) {
                 if (date < cutoffDateString) {
-                    delete languageStats[date];
+                    delete languageStats.dates[date];
+                } else {
+                    totalCount += languageStats.dates[date];
                 }
             }
             
-            // 如果该语言没有任何统计数据，删除该语言
-            if (Object.keys(languageStats).length === 0) {
-                delete this.statistics[language];
+            // 更新总使用次数
+            languageStats.totalCount = totalCount;
+            
+            // 如果该语言没有任何统计数据，标记为删除
+            if (totalCount === 0) {
+                languagesToRemove.push(language);
             }
         }
+        
+        // 删除没有数据的语言
+        for (const language of languagesToRemove) {
+            delete this.statistics.languages[language];
+        }
+        
+        // 更新频率排序数组
+        this.updateFrequencyOrder();
     }
 
     /**
-     * 计算语言使用频率
+     * 更新频率排序数组
+     */
+    private updateFrequencyOrder(): void {
+        const sortedLanguages = Object.keys(this.statistics.languages)
+            .sort((a, b) => this.statistics.languages[b].totalCount - this.statistics.languages[a].totalCount);
+        this.statistics.frequencyOrder = sortedLanguages;
+    }
+
+    /**
+     * 计算语言使用频率（兼容旧接口）
      */
     private calculateLanguageFrequency(): { [language: string]: number } {
         const frequency: { [language: string]: number } = {};
         
-        for (const language in this.statistics) {
-            let totalCount = 0;
-            const languageStats = this.statistics[language];
-            
-            for (const date in languageStats) {
-                totalCount += languageStats[date];
-            }
-            
-            if (totalCount > 0) {
-                frequency[language] = totalCount;
+        for (const language in this.statistics.languages) {
+            const languageStats = this.statistics.languages[language];
+            if (languageStats.totalCount > 0) {
+                frequency[language] = languageStats.totalCount;
             }
         }
         
@@ -268,10 +303,22 @@ export default class CodeLanguagesPlugin extends Plugin {
             const currentDate = this.getCurrentDateString();
             
             // 初始化语言统计数据
-            this.statistics[language] ||= {};
+            if (!this.statistics.languages[language]) {
+                this.statistics.languages[language] = {
+                    totalCount: 0,
+                    dates: {}
+                };
+            }
+            
+            const languageStats = this.statistics.languages[language];
             
             // 增加当天使用次数
-            this.statistics[language][currentDate] = (this.statistics[language][currentDate] || 0) + 1;
+            const oldCount = languageStats.dates[currentDate] || 0;
+            languageStats.dates[currentDate] = oldCount + 1;
+            languageStats.totalCount += 1;
+            
+            // 更新频率排序数组
+            this.updateFrequencyOrder();
             
             // 保存统计数据
             this.saveData(STATISTICS_NAME, this.statistics);
@@ -505,3 +552,4 @@ export default class CodeLanguagesPlugin extends Plugin {
         }
     }
 }
+
