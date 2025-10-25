@@ -8,7 +8,7 @@ const MAX_DATE_RECORDS = 90; // 每个语言最多保留的日期记录数量
 // 配置数据结构
 interface Config {
     sortMode: 'custom' | 'frequency';  // 排序模式：自定义排序，按频率排序
-    customOrder: string;  // 自定义顺序,逗号分隔
+    customOrderLanguages: string;  // 自定义排序语言,逗号分隔
     frequencyTopCount: number;  // 频率排序时置顶显示的语言数量(1-15)
     frequencyDaysRange: number;  // 频率统计范围天数(1-90)
     otherCustomLanguages: string;  // 其他自定义语言,逗号分隔
@@ -53,7 +53,7 @@ export default class CodeLanguagesPlugin extends Plugin {
         
         // 默认配置
         this.config.sortMode ||= 'frequency';
-        this.config.customOrder ||= '';
+        this.config.customOrderLanguages ||= '';
         this.config.frequencyTopCount ||= 5;
         this.config.frequencyDaysRange ||= 30;
         this.config.otherCustomLanguages ||= '';
@@ -151,7 +151,7 @@ export default class CodeLanguagesPlugin extends Plugin {
      * 解析并缓存配置中的语言列表
      */
     private parseAndCacheLanguages(): void {
-        this.cachedCustomOrderLanguages = this.parseLanguagesInput(this.config.customOrder);
+        this.cachedCustomOrderLanguages = this.parseLanguagesInput(this.config.customOrderLanguages);
         this.cachedOtherCustomLanguages = this.parseLanguagesInput(this.config.otherCustomLanguages);
         this.cachedExcludedLanguages = this.parseLanguagesInput(this.config.excludedLanguages);
     }
@@ -234,7 +234,7 @@ export default class CodeLanguagesPlugin extends Plugin {
 
     // 代码块语言变更
     private languageChange = (event: CustomEvent<{ language: string, languageElements: HTMLElement[], protyle: IProtyle }>) => {
-        // console.log("code-language-change", event);
+        // console.log("code-language-change", event.detail);
         const { language } = event.detail;
         
         // 记录语言使用频率
@@ -404,7 +404,7 @@ export default class CodeLanguagesPlugin extends Plugin {
                 textareaElement.rows = 4;
                 textareaElement.placeholder = this.i18n.fillList;
                 textareaElement.style.resize = 'vertical';
-                textareaElement.value = this.tempConfig.customOrder;
+                textareaElement.value = this.tempConfig.customOrderLanguages;
                 
                 const hrButton = document.createElement('div');
                 hrButton.className = 'fn__hr';
@@ -417,12 +417,12 @@ export default class CodeLanguagesPlugin extends Plugin {
                 fillButton.addEventListener('click', () => {
                     const builtinLanguages = this.getBuiltinLanguages().join(', ');
                     textareaElement.value = builtinLanguages;
-                    this.tempConfig.customOrder = builtinLanguages;
+                    this.tempConfig.customOrderLanguages = builtinLanguages;
                     textareaElement.focus();
                 });
                 
                 textareaElement.addEventListener('input', (e) => {
-                    this.tempConfig.customOrder = (e.target as HTMLInputElement).value;
+                    this.tempConfig.customOrderLanguages = (e.target as HTMLInputElement).value;
                 });
                 
                 container.appendChild(textareaElement);
