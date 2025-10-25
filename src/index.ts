@@ -1,8 +1,9 @@
 import {IProtyle, Plugin, Setting, Constants} from "siyuan";
 import "./index.scss";
 
-const CONFIG_NAME = "code-languages-config.json";
-const STATISTICS_NAME = "code-languages-statistics.json";
+const CONFIG_FILE = "code-languages-config.json";
+const STATISTICS_FILE = "code-languages-statistics.json";
+const MAX_DATE_RECORDS = 90; // 每个语言最多保留的日期记录数量
 
 // 配置数据结构
 interface Config {
@@ -42,10 +43,10 @@ export default class CodeLanguagesPlugin extends Plugin {
 
     async onload() {
         // 加载配置和统计数据
-        await this.loadData(CONFIG_NAME);
-        await this.loadData(STATISTICS_NAME);
-        this.config = this.data[CONFIG_NAME] ||= {} as Config;
-        this.statistics = this.data[STATISTICS_NAME] || {
+        await this.loadData(CONFIG_FILE);
+        await this.loadData(STATISTICS_FILE);
+        this.config = this.data[CONFIG_FILE] ||= {} as Config;
+        this.statistics = this.data[STATISTICS_FILE] || {
             frequencyOrder: [],
             languages: {}
         };
@@ -69,7 +70,7 @@ export default class CodeLanguagesPlugin extends Plugin {
             confirmCallback: () => {
                 // 将临时配置复制到实际配置
                 this.config = { ...this.tempConfig };
-                this.saveData(CONFIG_NAME, this.config);
+                this.saveData(CONFIG_FILE, this.config);
                 
                 // 配置变更后重新解析并缓存语言列表
                 this.parseAndCacheLanguages();
@@ -101,8 +102,8 @@ export default class CodeLanguagesPlugin extends Plugin {
         this.eventBus.off("code-language-update", this.languageUpdate);
         this.eventBus.off("code-language-change", this.languageChange);
 
-        await this.removeData(CONFIG_NAME);
-        await this.removeData(STATISTICS_NAME);
+        await this.removeData(CONFIG_FILE);
+        await this.removeData(STATISTICS_FILE);
 
         console.log(this.displayName, this.i18n.uninstall);
     }
@@ -153,77 +154,6 @@ export default class CodeLanguagesPlugin extends Plugin {
         this.cachedCustomOrderLanguages = this.parseLanguagesInput(this.config.customOrder);
         this.cachedOtherCustomLanguages = this.parseLanguagesInput(this.config.otherCustomLanguages);
         this.cachedExcludedLanguages = this.parseLanguagesInput(this.config.excludedLanguages);
-    }
-
-    /**
-     * 获取当前日期字符串 (YYYY-MM-DD)
-     */
-    private getCurrentDateString(): string {
-        const now = new Date();
-        return now.toISOString().split('T')[0];
-    }
-
-    /**
-     * 清理过期的统计数据
-     */
-    private cleanupExpiredStatistics(): void {
-        const currentDate = new Date();
-        const cutoffDate = new Date(currentDate.getTime() - this.config.frequencyDaysRange * 24 * 60 * 60 * 1000);
-        const cutoffDateString = cutoffDate.toISOString().split('T')[0];
-
-        const languagesToRemove: string[] = [];
-        
-        for (const language in this.statistics.languages) {
-            const languageStats = this.statistics.languages[language];
-            let totalCount = 0;
-            
-            // 清理过期日期数据
-            for (const date in languageStats.dates) {
-                if (date < cutoffDateString) {
-                    delete languageStats.dates[date];
-                } else {
-                    totalCount += languageStats.dates[date];
-                }
-            }
-            
-            // 更新总使用次数
-            languageStats.totalCount = totalCount;
-            
-            // 如果该语言没有任何统计数据，标记为删除
-            if (totalCount === 0) {
-                languagesToRemove.push(language);
-            }
-        }
-        
-        // 删除没有数据的语言
-        for (const language of languagesToRemove) {
-            delete this.statistics.languages[language];
-        }
-        
-        // 更新频率排序数组
-        this.updateFrequencyOrder();
-    }
-
-    /**
-     * 更新频率排序数组
-     */
-    private updateFrequencyOrder(): void {
-        const sortedLanguages = Object.keys(this.statistics.languages)
-            .sort((a, b) => this.statistics.languages[b].totalCount - this.statistics.languages[a].totalCount);
-        this.statistics.frequencyOrder = sortedLanguages;
-    }
-
-    /**
-     * 获取内置语言列表
-     */
-    private getBuiltinLanguages(): string[] {
-        // 获取 highlight.js 支持的语言列表
-        const hljsLanguages = (window as any).hljs?.listLanguages() ?? [];
-        
-        // 获取思源笔记的别名语言列表
-        const siyuanAliasLanguages = Constants.ALIAS_CODE_LANGUAGES ?? [];
-        
-        return [...siyuanAliasLanguages, ...hljsLanguages].sort();
     }
 
     // 代码语言列表更新
@@ -306,7 +236,7 @@ export default class CodeLanguagesPlugin extends Plugin {
 
     // 代码块语言变更
     private languageChange = (event: CustomEvent<{ language: string, languageElements: HTMLElement[], protyle: IProtyle }>) => {
-        // console.log("code-language-change", event);
+        console.log("code-language-change", event);
         const { language } = event.detail;
         
         // 记录语言使用频率
@@ -328,15 +258,59 @@ export default class CodeLanguagesPlugin extends Plugin {
             languageStats.dates[currentDate] = oldCount + 1;
             languageStats.totalCount += 1;
             
+            // 检查并清理该语言的过期统计数据
+            const dates = languageStats.dates;
+            const dateKeys = Object.keys(dates);
+            
+            // 如果日期键值对超过最大记录数，剔除最早的
+            if (dateKeys.length > MAX_DATE_RECORDS) {
+                // 按日期排序，删除最早的
+                const sortedDates = dateKeys.sort();
+                const datesToRemove = sortedDates.slice(0, dateKeys.length - MAX_DATE_RECORDS);
+                
+                for (const dateToRemove of datesToRemove) {
+                    languageStats.totalCount -= dates[dateToRemove];
+                    delete dates[dateToRemove];
+                }
+            }
+            
             // 更新频率排序数组
             this.updateFrequencyOrder();
             
             // 保存统计数据
-            this.saveData(STATISTICS_NAME, this.statistics);
+            this.saveData(STATISTICS_FILE, this.statistics);
         }
+    }
+
+    /**
+     * 获取当前日期字符串 (YYYY-MM-DD)
+     */
+    private getCurrentDateString(): string {
+        const now = new Date();
+        return now.toISOString().split('T')[0];
+    }
+
+
+    /**
+     * 更新频率排序数组
+     */
+    private updateFrequencyOrder(): void {
+        const sortedLanguages = Object.keys(this.statistics.languages)
+            .sort((a, b) => this.statistics.languages[b].totalCount - this.statistics.languages[a].totalCount);
+        this.statistics.frequencyOrder = sortedLanguages;
+    }
+
+    /**
+     * 获取内置语言列表
+     */
+    private getBuiltinLanguages(): string[] {
+        // 获取 highlight.js 支持的语言列表
+        const hljsLanguages = (window as any).hljs?.listLanguages() ?? [];
         
-        // 清理过期统计数据
-        this.cleanupExpiredStatistics();
+        // 获取思源笔记的别名语言列表
+        const siyuanAliasLanguages = Constants.ALIAS_CODE_LANGUAGES ?? [];
+        
+        return [...siyuanAliasLanguages, ...hljsLanguages].sort();
     }
 
     public openSetting() {
@@ -464,12 +438,12 @@ export default class CodeLanguagesPlugin extends Plugin {
                 inputElement.className = 'b3-text-field';
                 inputElement.type = 'number';
                 inputElement.min = '1';
-                inputElement.max = '90';
+                inputElement.max = `${MAX_DATE_RECORDS}`;
                 inputElement.value = this.tempConfig.frequencyDaysRange.toString();
                 
                 inputElement.addEventListener('input', (e) => {
                     const value = parseInt((e.target as HTMLInputElement).value);
-                    if (value >= 1 && value <= 90) {
+                    if (value >= 1 && value <= MAX_DATE_RECORDS) {
                         this.tempConfig.frequencyDaysRange = value;
                     }
                 });
