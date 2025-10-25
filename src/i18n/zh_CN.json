@@ -1,5 +1,20 @@
 {
   "onload": "插件已启用",
   "onunload": "插件已禁用",
-  "uninstall": "插件已卸载"
+  "uninstall": "插件已卸载",
+  "sortMode": "排序模式",
+  "customOrder": "自定义排序",
+  "frequencySort": "按使用频率排序",
+  "customOrderLanguages": "自定义排序列表",
+  "frequencyTopCount": "频率排序置顶数量",
+  "frequencyDaysRange": "频率统计天数",
+  "otherCustomLanguages": "其他自定义语言",
+  "excludedLanguages": "剔除的内置语言",
+  "fillAllBuiltinLanguages": "一键填充所有内置语言",
+  "customOrderTip": "设置语言的自定义排序，用逗号分隔，最多 150 个。这些语言将显示在列表最前面。",
+  "frequencyTopCountTip": "设置按使用频率排序时，置顶显示的语言数量（1~15）。",
+  "frequencyDaysRangeTip": "设置统计使用频率的时间范围天数（1~90）。",
+  "otherCustomLanguagesTip": "添加其他不在内置语言列表中的语言，这些语言不会默认置顶，按照字母排序。",
+  "excludedLanguagesTip": "填入要从列表中隐藏的内置语言，用逗号分隔。",
+  "fillList": "填写语言列表"
 }

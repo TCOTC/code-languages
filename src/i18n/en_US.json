@@ -1,5 +1,20 @@
 {
   "onload": "Plugin enabled",
   "onunload": "Plugin disabled",
-  "uninstall": "Plugin uninstalled"
+  "uninstall": "Plugin uninstalled",
+  "sortMode": "Sort Mode",
+  "customOrder": "Custom Order",
+  "frequencySort": "Sort by Usage Frequency",
+  "customOrderLanguages": "Custom Order Languages",
+  "frequencyTopCount": "Frequency Top Count",
+  "frequencyDaysRange": "Frequency Days Range",
+  "otherCustomLanguages": "Other Custom Languages",
+  "excludedLanguages": "Excluded Languages",
+  "fillAllBuiltinLanguages": "Fill All Built-in Languages",
+  "customOrderTip": "Set custom order for languages, separated by commas, up to 150 languages. These languages will appear at the top of the list.",
+  "frequencyTopCountTip": "Set the number of top languages to display when sorting by frequency (1-15).",
+  "frequencyDaysRangeTip": "Set the time range in days for frequency statistics (1-90).",
+  "otherCustomLanguagesTip": "Add other languages not in the built-in list. These languages won't be pinned to the top by default and will be sorted alphabetically.",
+  "excludedLanguagesTip": "Enter built-in languages to hide from the list, separated by commas.",
+  "fillList": "Fill Language List"
 }
