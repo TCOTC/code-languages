@@ -1,4 +1,4 @@
-import {IProtyle, Plugin, Setting, Constants} from "siyuan";
+import {Constants, IProtyle, Plugin, Setting} from "siyuan";
 import "./index.scss";
 
 const CONFIG_FILE = "code-languages-config.json";
@@ -137,7 +137,7 @@ export default class CodeLanguagesPlugin extends Plugin {
                 let trimmed = part.trim();
                 
                 // 将非首尾空白和反引号转为下划线
-                trimmed = trimmed.replace(/`| /g, '_');
+                trimmed = trimmed.replace(/[` ]/g, '_');
                 
                 // 使用 escapeHtml 处理特殊字符
                 trimmed = this.escapeHtml(trimmed);
@@ -197,10 +197,6 @@ export default class CodeLanguagesPlugin extends Plugin {
             event.detail.languages = matchLanguages;
             return;
         }
-        
-        
-        // 过滤掉被剔除的内置语言
-        const availableBuiltinLanguages = languages.filter(lang => !excludedLanguages.includes(lang));
         
         let sortedLanguages: string[] = [];
         
@@ -276,7 +272,7 @@ export default class CodeLanguagesPlugin extends Plugin {
             this.updateFrequencyOrder(language);
             
             // 保存统计数据
-            this.saveData(STATISTICS_FILE, this.statistics);
+            void this.saveData(STATISTICS_FILE, this.statistics);
         }
     }
 
@@ -301,9 +297,8 @@ export default class CodeLanguagesPlugin extends Plugin {
         
         // 如果没有指定变更语言，使用全量排序
         if (!changedLanguage) {
-            const sortedLanguages = Object.keys(this.statistics.languages)
+            this.statistics.frequencyOrder = Object.keys(this.statistics.languages)
                 .sort((a, b) => this.statistics.languages[b].totalCount - this.statistics.languages[a].totalCount);
-            this.statistics.frequencyOrder = sortedLanguages;
             return;
         }
         
