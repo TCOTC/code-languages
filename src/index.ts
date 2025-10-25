@@ -34,14 +34,17 @@ export default class CodeLanguagesPlugin extends Plugin {
     private config: Config;
     private tempConfig: Config;  // 临时配置，用于存储用户输入
     private statistics: Statistics;
+    
+    // 缓存解析后的语言列表
+    private cachedCustomOrderLanguages: string[] = [];
+    private cachedOtherCustomLanguages: string[] = [];
+    private cachedExcludedLanguages: string[] = [];
 
     async onload() {
         // 加载配置和统计数据
         await this.loadData(CONFIG_NAME);
         await this.loadData(STATISTICS_NAME);
         this.config = this.data[CONFIG_NAME] ||= {} as Config;
-        
-        // 初始化统计数据
         this.statistics = this.data[STATISTICS_NAME] || {
             frequencyOrder: [],
             languages: {}
@@ -58,12 +61,18 @@ export default class CodeLanguagesPlugin extends Plugin {
         // 初始化临时配置（复制实际配置）
         this.tempConfig = { ...this.config };
 
+        // 解析并缓存配置中的语言列表
+        this.parseAndCacheLanguages();
+
         // 插件设置
         this.setting = new Setting({
             confirmCallback: () => {
                 // 将临时配置复制到实际配置
                 this.config = { ...this.tempConfig };
                 this.saveData(CONFIG_NAME, this.config);
+                
+                // 配置变更后重新解析并缓存语言列表
+                this.parseAndCacheLanguages();
             },
             destroyCallback: () => {
                 // 还原临时配置为实际配置
@@ -101,11 +110,12 @@ export default class CodeLanguagesPlugin extends Plugin {
     /**
      * 转义 HTML 特殊字符
      */
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+    private escapeHtml = (html: string) => {
+        if (!html) {
+            return html;
+        }
+        return html.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    };
 
     /**
      * 解析语言输入字符串
@@ -117,8 +127,8 @@ export default class CodeLanguagesPlugin extends Plugin {
             return [];
         }
 
-        // 按逗号分割，限制最多 150 个
-        const parts = input.split(',').slice(0, 150);
+        // 按逗号分割，限制最多 300 个
+        const parts = input.split(',').slice(0, 300);
         
         return parts
             .map(part => {
@@ -134,6 +144,15 @@ export default class CodeLanguagesPlugin extends Plugin {
                 return trimmed;
             })
             .filter(lang => lang.length > 0); // 剔除空字符串
+    }
+
+    /**
+     * 解析并缓存配置中的语言列表
+     */
+    private parseAndCacheLanguages(): void {
+        this.cachedCustomOrderLanguages = this.parseLanguagesInput(this.config.customOrder);
+        this.cachedOtherCustomLanguages = this.parseLanguagesInput(this.config.otherCustomLanguages);
+        this.cachedExcludedLanguages = this.parseLanguagesInput(this.config.excludedLanguages);
     }
 
     /**
@@ -195,22 +214,6 @@ export default class CodeLanguagesPlugin extends Plugin {
     }
 
     /**
-     * 计算语言使用频率（兼容旧接口）
-     */
-    private calculateLanguageFrequency(): { [language: string]: number } {
-        const frequency: { [language: string]: number } = {};
-        
-        for (const language in this.statistics.languages) {
-            const languageStats = this.statistics.languages[language];
-            if (languageStats.totalCount > 0) {
-                frequency[language] = languageStats.totalCount;
-            }
-        }
-        
-        return frequency;
-    }
-
-    /**
      * 获取内置语言列表
      */
     private getBuiltinLanguages(): string[] {
@@ -224,23 +227,49 @@ export default class CodeLanguagesPlugin extends Plugin {
     }
 
     // 代码语言列表更新
-    private languageUpdate = (event: CustomEvent<{ languages: string[], type: string }>) => {
+    private languageUpdate = (event: CustomEvent<{ languages: string[], value: string }>) => {
         // console.log("code-language-update", event.detail);
-        const { languages } = event.detail;
+        const { languages, value } = event.detail;
         
-        // 清理过期统计数据
-        this.cleanupExpiredStatistics();
+        // 使用缓存的语言列表
+        const customOrderLanguages = this.cachedCustomOrderLanguages;
+        const otherCustomLanguages = this.cachedOtherCustomLanguages;
+        const excludedLanguages = this.cachedExcludedLanguages;
+
+        // 过滤时筛选和排序
+        if (value) {
+            const lowerCaseValue = value.toLowerCase();
+            let matchLanguages = this.config.sortMode === 'custom' ? [
+                // 自定义排序模式
+                ...customOrderLanguages,
+                ...otherCustomLanguages.filter(lang => !customOrderLanguages.includes(lang)),
+                ...languages.filter(lang => !customOrderLanguages.includes(lang) && !otherCustomLanguages.includes(lang) && !excludedLanguages.includes(lang)),
+            ] : [
+                ...otherCustomLanguages,
+                ...languages.filter(lang => !otherCustomLanguages.includes(lang) && !excludedLanguages.includes(lang)),
+            ];
+            // 使用原生算法筛选 https://github.com/siyuan-note/siyuan/blob/a0593724a20ec42dc2b101b08d5ffa6492148d05/app/src/protyle/toolbar/index.ts#L1302-L1317
+            matchLanguages = matchLanguages
+                .filter(item => item.toLowerCase().includes(lowerCaseValue))
+                .sort((a, b) => {
+                    // 不区分大小写
+                    const aStartsWith = a.toLowerCase().startsWith(lowerCaseValue);
+                    const bStartsWith = b.toLowerCase().startsWith(lowerCaseValue);
+
+                    // 两者都匹配开头时，短字符串优先
+                    if (aStartsWith && bStartsWith) return a.length - b.length;
+                    if (aStartsWith) return -1;
+                    if (bStartsWith) return 1;
+
+                    // 都不匹配时保持原顺序
+                    return 0;
+                });
+            event.detail.languages = matchLanguages;
+            return;
+        }
         
-        // 解析配置中的语言列表
-        const customOrderLanguages = this.parseLanguagesInput(this.config.customOrder);
-        const otherCustomLanguages = this.parseLanguagesInput(this.config.otherCustomLanguages);
-        const excludedLanguages = this.parseLanguagesInput(this.config.excludedLanguages);
-        
-        // // 获取内置语言列表
-        // const builtinLanguages = this.getBuiltinLanguages();
         
         // 过滤掉被剔除的内置语言
-        // const availableBuiltinLanguages = builtinLanguages.filter(lang => !excludedLanguages.includes(lang));
         const availableBuiltinLanguages = languages.filter(lang => !excludedLanguages.includes(lang));
         
         let sortedLanguages: string[] = [];
@@ -256,34 +285,16 @@ export default class CodeLanguagesPlugin extends Plugin {
             ];
         } else {
             // 按频率排序模式
-            const frequency = this.calculateLanguageFrequency();
-            
-            // 按频率排序，取前 N 个
-            const frequencyEntries: [string, number][] = [];
-            for (const lang in frequency) {
-                frequencyEntries.push([lang, frequency[lang]]);
-            }
-            
-            const topFrequencyLanguages = frequencyEntries
-                .sort(([, a], [, b]) => b - a)
-                .slice(0, this.config.frequencyTopCount)
-                .map(([lang]) => lang)
-                .filter((lang: string) => languages.includes(lang));
-            
-            // 其他自定义语言（按字母序）
-            const otherCustomSorted = otherCustomLanguages
-                .filter(lang => languages.includes(lang) && !topFrequencyLanguages.includes(lang))
-                .sort();
-            
-            // 剩余的内置语言（按字母序）
-            const remainingBuiltinSorted = availableBuiltinLanguages
-                .filter(lang => languages.includes(lang) && !topFrequencyLanguages.includes(lang) && !otherCustomLanguages.includes(lang))
-                .sort();
-            
+            const topFrequencyLanguages = this.statistics.frequencyOrder.slice(0, this.config.frequencyTopCount);
             sortedLanguages = [
+                // 直接使用已排序的频率数组，取前 N 个
                 ...topFrequencyLanguages,
-                ...otherCustomSorted,
-                ...remainingBuiltinSorted
+                ...[
+                    // 其他自定义语言
+                    ...otherCustomLanguages.filter(lang => !topFrequencyLanguages.includes(lang)),
+                    // 剩余的内置语言
+                    ...languages.filter(lang => !topFrequencyLanguages.includes(lang) && !otherCustomLanguages.includes(lang) && !excludedLanguages.includes(lang)),
+                ].sort(),
             ];
         }
         
@@ -323,6 +334,9 @@ export default class CodeLanguagesPlugin extends Plugin {
             // 保存统计数据
             this.saveData(STATISTICS_NAME, this.statistics);
         }
+        
+        // 清理过期统计数据
+        this.cleanupExpiredStatistics();
     }
 
     public openSetting() {
