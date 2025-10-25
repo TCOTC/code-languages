@@ -230,13 +230,11 @@ export default class CodeLanguagesPlugin extends Plugin {
         
         // 将排序后的语言列表赋值回 event.detail.languages
         event.detail.languages = sortedLanguages;
-        
-        console.log("重新排序后的语言列表:", sortedLanguages);
     }
 
     // 代码块语言变更
     private languageChange = (event: CustomEvent<{ language: string, languageElements: HTMLElement[], protyle: IProtyle }>) => {
-        console.log("code-language-change", event);
+        // console.log("code-language-change", event);
         const { language } = event.detail;
         
         // 记录语言使用频率
@@ -274,8 +272,8 @@ export default class CodeLanguagesPlugin extends Plugin {
                 }
             }
             
-            // 更新频率排序数组
-            this.updateFrequencyOrder();
+            // 更新频率排序数组，传递变更的语言参数进行优化排序
+            this.updateFrequencyOrder(language);
             
             // 保存统计数据
             this.saveData(STATISTICS_FILE, this.statistics);
@@ -293,11 +291,43 @@ export default class CodeLanguagesPlugin extends Plugin {
 
     /**
      * 更新频率排序数组
+     * 使用冒泡排序优化，只调整变更语言的相邻位置
      */
-    private updateFrequencyOrder(): void {
-        const sortedLanguages = Object.keys(this.statistics.languages)
-            .sort((a, b) => this.statistics.languages[b].totalCount - this.statistics.languages[a].totalCount);
-        this.statistics.frequencyOrder = sortedLanguages;
+    private updateFrequencyOrder(changedLanguage?: string): void {
+        // 如果是新语言，直接添加到频率排序数组末尾
+        if (changedLanguage && !this.statistics.frequencyOrder.includes(changedLanguage)) {
+            this.statistics.frequencyOrder.push(changedLanguage);
+        }
+        
+        // 如果没有指定变更语言，使用全量排序
+        if (!changedLanguage) {
+            const sortedLanguages = Object.keys(this.statistics.languages)
+                .sort((a, b) => this.statistics.languages[b].totalCount - this.statistics.languages[a].totalCount);
+            this.statistics.frequencyOrder = sortedLanguages;
+            return;
+        }
+        
+        // 使用冒泡排序优化：只调整变更语言的相邻位置
+        const frequencyOrder = this.statistics.frequencyOrder;
+        const changedIndex = frequencyOrder.indexOf(changedLanguage);
+        
+        if (changedIndex === -1) return; // 语言不在排序数组中
+        
+        const changedCount = this.statistics.languages[changedLanguage].totalCount;
+        
+        // 向前冒泡：如果当前语言的使用次数比前面的语言多，则向前移动
+        // 注意：由于每次调用时使用次数都是增加的，所以只需要向前移动
+        for (let i = changedIndex; i > 0; i--) {
+            const prevLanguage = frequencyOrder[i - 1];
+            const prevCount = this.statistics.languages[prevLanguage].totalCount;
+            
+            if (changedCount > prevCount) {
+                // 交换位置
+                [frequencyOrder[i], frequencyOrder[i - 1]] = [frequencyOrder[i - 1], frequencyOrder[i]];
+            } else {
+                break; // 已经到达正确位置
+            }
+        }
     }
 
     /**
@@ -385,8 +415,9 @@ export default class CodeLanguagesPlugin extends Plugin {
                 fillButton.style.marginLeft = 'auto';
                 fillButton.textContent = this.i18n.fillAllBuiltinLanguages;
                 fillButton.addEventListener('click', () => {
-                    const builtinLanguages = this.getBuiltinLanguages();
-                    textareaElement.value = builtinLanguages.join(', ');
+                    const builtinLanguages = this.getBuiltinLanguages().join(', ');
+                    textareaElement.value = builtinLanguages;
+                    this.tempConfig.customOrder = builtinLanguages;
                     textareaElement.focus();
                 });
                 
@@ -500,8 +531,9 @@ export default class CodeLanguagesPlugin extends Plugin {
                 fillButton.style.marginLeft = 'auto';
                 fillButton.textContent = this.i18n.fillAllBuiltinLanguages;
                 fillButton.addEventListener('click', () => {
-                    const builtinLanguages = this.getBuiltinLanguages();
-                    textareaElement.value = builtinLanguages.join(', ');
+                    const builtinLanguages = this.getBuiltinLanguages().join(', ');
+                    textareaElement.value = builtinLanguages;
+                    this.tempConfig.excludedLanguages = builtinLanguages;
                     textareaElement.focus();
                 });
                 
