@@ -23,6 +23,7 @@ interface Statistics {
 
 export default class CodeLanguagesPlugin extends Plugin {
     private config: Config;
+    private tempConfig: Config;  // 临时配置，用于存储用户输入
     private statistics: Statistics;
 
     async onload() {
@@ -39,11 +40,20 @@ export default class CodeLanguagesPlugin extends Plugin {
         this.config.frequencyDaysRange ||= 30;
         this.config.otherCustomLanguages ||= '';
         this.config.excludedLanguages ||= '';
+        
+        // 初始化临时配置（复制实际配置）
+        this.tempConfig = { ...this.config };
 
         // 插件设置
         this.setting = new Setting({
             confirmCallback: () => {
+                // 将临时配置复制到实际配置
+                this.config = { ...this.tempConfig };
                 this.saveData(CONFIG_NAME, this.config);
+            },
+            destroyCallback: () => {
+                // 还原临时配置为实际配置
+                this.tempConfig = { ...this.config };
             }
         });
         
@@ -178,233 +188,6 @@ export default class CodeLanguagesPlugin extends Plugin {
         return [...aliasLanguages, ...hljsLanguages].sort();
     }
 
-    public openSetting() {
-        this.setting.open(this.displayName || this.name);
-        const contentElement = this.setting.dialog.element.querySelector('.b3-dialog__content') as HTMLElement;
-        if (contentElement) {
-            contentElement.style.scrollbarGutter = 'stable';
-        }
-        // 初始化配置项可见性
-        this.updateSettingsVisibility();
-    }
-
-    /**
-     * 构建插件设置界面
-     */
-    private buildSettingsUI(): void {
-        // 排序模式选择
-        this.setting.addItem({
-            title: this.i18n.sortMode,
-            createActionElement: () => {
-                const selectElement = document.createElement('select');
-                selectElement.className = 'b3-select';
-                
-                const customOption = document.createElement('option');
-                customOption.value = 'custom';
-                customOption.textContent = this.i18n.customOrder;
-                
-                const frequencyOption = document.createElement('option');
-                frequencyOption.value = 'frequency';
-                frequencyOption.textContent = this.i18n.frequencySort;
-                
-                selectElement.appendChild(customOption);
-                selectElement.appendChild(frequencyOption);
-                selectElement.value = this.config.sortMode;
-                
-                selectElement.addEventListener('change', (e) => {
-                    this.config.sortMode = (e.target as HTMLSelectElement).value as 'custom' | 'frequency';
-                    this.updateSettingsVisibility();
-                });
-                
-                return selectElement;
-            }
-        });
-
-        // 自定义顺序语言列表
-        this.setting.addItem({
-            title: this.i18n.customOrderLanguages,
-            description: this.i18n.customOrderTip,
-            direction: 'row',
-            createActionElement: () => {
-                const container = document.createElement('div');
-                
-                const textareaElement = document.createElement('textarea');
-                textareaElement.className = 'b3-text-field fn__block';
-                textareaElement.spellcheck = false;
-                textareaElement.rows = 4;
-                textareaElement.placeholder = this.i18n.fillList;
-                textareaElement.style.resize = 'vertical';
-                textareaElement.value = this.config.customOrder;
-                
-                const hrButton = document.createElement('div');
-                hrButton.className = 'fn__hr';
-                
-                const fillButton = document.createElement('button');
-                fillButton.className = 'b3-button b3-button--outline fn__size200 fn__flex-center';
-                fillButton.style.display = 'flex';
-                fillButton.style.marginLeft = 'auto';
-                fillButton.textContent = this.i18n.fillAllBuiltinLanguages;
-                fillButton.addEventListener('click', () => {
-                    const builtinLanguages = this.getBuiltinLanguages();
-                    textareaElement.value = builtinLanguages.join(', ');
-                    textareaElement.focus();
-                });
-                
-                textareaElement.addEventListener('input', (e) => {
-                    this.config.customOrder = (e.target as HTMLInputElement).value;
-                });
-                
-                container.appendChild(textareaElement);
-                container.appendChild(hrButton);
-                container.appendChild(fillButton);
-                
-                this.customOrderContainer = null;
-                this.customOrderContainer = container;
-                return container;
-            }
-        });
-
-        // 频率排序置顶数量
-        this.setting.addItem({
-            title: this.i18n.frequencyTopCount,
-            description: this.i18n.frequencyTopCountTip,
-            createActionElement: () => {
-                const inputElement = document.createElement('input');
-                inputElement.className = 'b3-text-field';
-                inputElement.type = 'number';
-                inputElement.min = '1';
-                inputElement.max = '15';
-                inputElement.value = this.config.frequencyTopCount.toString();
-                
-                inputElement.addEventListener('input', (e) => {
-                    const value = parseInt((e.target as HTMLInputElement).value);
-                    if (value >= 1 && value <= 15) {
-                        this.config.frequencyTopCount = value;
-                    }
-                });
-                
-                this.frequencyTopCountContainer = null;
-                this.frequencyTopCountContainer = inputElement;
-                return inputElement;
-            }
-        });
-
-        // 频率统计天数
-        this.setting.addItem({
-            title: this.i18n.frequencyDaysRange,
-            description: this.i18n.frequencyDaysRangeTip,
-            createActionElement: () => {
-                const inputElement = document.createElement('input');
-                inputElement.className = 'b3-text-field';
-                inputElement.type = 'number';
-                inputElement.min = '1';
-                inputElement.max = '90';
-                inputElement.value = this.config.frequencyDaysRange.toString();
-                
-                inputElement.addEventListener('input', (e) => {
-                    const value = parseInt((e.target as HTMLInputElement).value);
-                    if (value >= 1 && value <= 90) {
-                        this.config.frequencyDaysRange = value;
-                    }
-                });
-                
-                this.frequencyDaysRangeContainer = null;
-                this.frequencyDaysRangeContainer = inputElement;
-                return inputElement;
-            }
-        });
-
-        // 其他自定义语言
-        this.setting.addItem({
-            title: this.i18n.otherCustomLanguages,
-            description: this.i18n.otherCustomLanguagesTip,
-            createActionElement: () => {
-                const textareaElement = document.createElement('textarea');
-                textareaElement.className = 'b3-text-field fn__block';
-                textareaElement.spellcheck = false;
-                textareaElement.rows = 4;
-                textareaElement.placeholder = this.i18n.fillList;
-                textareaElement.style.resize = 'vertical';
-                textareaElement.value = this.config.otherCustomLanguages;
-                
-                textareaElement.addEventListener('input', (e) => {
-                    this.config.otherCustomLanguages = (e.target as HTMLInputElement).value;
-                });
-                
-                return textareaElement;
-            }
-        });
-
-        // 剔除的内置语言
-        this.setting.addItem({
-            title: this.i18n.excludedLanguages,
-            description: this.i18n.excludedLanguagesTip,
-            direction: 'row',
-            createActionElement: () => {
-                const container = document.createElement('div');
-
-                const textareaElement = document.createElement('textarea');
-                textareaElement.className = 'b3-text-field fn__block';
-                textareaElement.spellcheck = false;
-                textareaElement.rows = 4;
-                textareaElement.placeholder = this.i18n.fillList;
-                textareaElement.style.resize = 'vertical';
-                textareaElement.value = this.config.excludedLanguages;
-                
-                const hrButton = document.createElement('div');
-                hrButton.className = 'fn__hr';
-                
-                const fillButton = document.createElement('button');
-                fillButton.className = 'b3-button b3-button--outline fn__size200 fn__flex-center';
-                fillButton.style.display = 'flex';
-                fillButton.style.marginLeft = 'auto';
-                fillButton.textContent = this.i18n.fillAllBuiltinLanguages;
-                fillButton.addEventListener('click', () => {
-                    const builtinLanguages = this.getBuiltinLanguages();
-                    textareaElement.value = builtinLanguages.join(', ');
-                    textareaElement.focus();
-                });
-                
-                textareaElement.addEventListener('input', (e) => {
-                    this.config.excludedLanguages = (e.target as HTMLInputElement).value;
-                });
-                
-                container.appendChild(textareaElement);
-                container.appendChild(hrButton);
-                container.appendChild(fillButton);
-                
-                return container;
-            }
-        });
-    }
-
-    /**
-     * 更新设置界面配置项可见性
-     */
-    private updateSettingsVisibility(): void {
-        const isCustomMode = this.config.sortMode === 'custom';
-        
-        const customOrderContainerLabel = this.customOrderContainer?.closest('.b3-label') as HTMLElement;
-        if (customOrderContainerLabel) {
-            customOrderContainerLabel.style.display = isCustomMode ? '' : 'none';
-        }
-        
-        const frequencyTopCountContainerLabel = this.frequencyTopCountContainer?.closest('.b3-label') as HTMLElement;
-        if (frequencyTopCountContainerLabel) {
-            frequencyTopCountContainerLabel.style.display = isCustomMode ? 'none' : '';
-        }
-        
-        const frequencyDaysRangeContainerLabel = this.frequencyDaysRangeContainer?.closest('.b3-label') as HTMLElement;
-        if (frequencyDaysRangeContainerLabel) {
-            frequencyDaysRangeContainerLabel.style.display = isCustomMode ? 'none' : '';
-        }
-    }
-
-    // 设置界面元素引用
-    private customOrderContainer?: HTMLElement;
-    private frequencyTopCountContainer?: HTMLElement;
-    private frequencyDaysRangeContainer?: HTMLElement;
-
     // 代码语言列表更新
     private languageUpdate = (event: CustomEvent<{ languages: string[], type: string }>) => {
         console.log("code-language-update", event.detail);
@@ -496,5 +279,232 @@ export default class CodeLanguagesPlugin extends Plugin {
         
         // 执行相应的操作
         console.log(`代码语言从 ${oldLanguage} 更改为: ${language}`);
+    }
+
+    public openSetting() {
+        this.setting.open(this.displayName || this.name);
+        const contentElement = this.setting.dialog.element.querySelector('.b3-dialog__content') as HTMLElement;
+        if (contentElement) {
+            contentElement.style.scrollbarGutter = 'stable';
+        }
+        // 初始化配置项可见性
+        this.updateSettingsVisibility();
+    }
+
+    // 设置界面元素引用
+    private customOrderContainer?: HTMLElement;
+    private frequencyTopCountContainer?: HTMLElement;
+    private frequencyDaysRangeContainer?: HTMLElement;
+
+    /**
+     * 构建插件设置界面
+     */
+    private buildSettingsUI(): void {
+        // 排序模式选择
+        this.setting.addItem({
+            title: this.i18n.sortMode,
+            createActionElement: () => {
+                const selectElement = document.createElement('select');
+                selectElement.className = 'b3-select';
+                
+                const customOption = document.createElement('option');
+                customOption.value = 'custom';
+                customOption.textContent = this.i18n.customOrder;
+                
+                const frequencyOption = document.createElement('option');
+                frequencyOption.value = 'frequency';
+                frequencyOption.textContent = this.i18n.frequencySort;
+                
+                selectElement.appendChild(customOption);
+                selectElement.appendChild(frequencyOption);
+                selectElement.value = this.tempConfig.sortMode;
+                
+                selectElement.addEventListener('change', (e) => {
+                    this.tempConfig.sortMode = (e.target as HTMLSelectElement).value as 'custom' | 'frequency';
+                    this.updateSettingsVisibility();
+                });
+                
+                return selectElement;
+            }
+        });
+
+        // 自定义排序列表
+        this.setting.addItem({
+            title: this.i18n.customOrderLanguages,
+            description: this.i18n.customOrderTip,
+            direction: 'row',
+            createActionElement: () => {
+                const container = document.createElement('div');
+                
+                const textareaElement = document.createElement('textarea');
+                textareaElement.className = 'b3-text-field fn__block';
+                textareaElement.spellcheck = false;
+                textareaElement.rows = 4;
+                textareaElement.placeholder = this.i18n.fillList;
+                textareaElement.style.resize = 'vertical';
+                textareaElement.value = this.tempConfig.customOrder;
+                
+                const hrButton = document.createElement('div');
+                hrButton.className = 'fn__hr';
+                
+                const fillButton = document.createElement('button');
+                fillButton.className = 'b3-button b3-button--outline fn__size200 fn__flex-center';
+                fillButton.style.display = 'flex';
+                fillButton.style.marginLeft = 'auto';
+                fillButton.textContent = this.i18n.fillAllBuiltinLanguages;
+                fillButton.addEventListener('click', () => {
+                    const builtinLanguages = this.getBuiltinLanguages();
+                    textareaElement.value = builtinLanguages.join(', ');
+                    textareaElement.focus();
+                });
+                
+                textareaElement.addEventListener('input', (e) => {
+                    this.tempConfig.customOrder = (e.target as HTMLInputElement).value;
+                });
+                
+                container.appendChild(textareaElement);
+                container.appendChild(hrButton);
+                container.appendChild(fillButton);
+                
+                this.customOrderContainer = null;
+                this.customOrderContainer = container;
+                return container;
+            }
+        });
+
+        // 频率排序置顶数量
+        this.setting.addItem({
+            title: this.i18n.frequencyTopCount,
+            description: this.i18n.frequencyTopCountTip,
+            createActionElement: () => {
+                const inputElement = document.createElement('input');
+                inputElement.className = 'b3-text-field';
+                inputElement.type = 'number';
+                inputElement.min = '1';
+                inputElement.max = '15';
+                inputElement.value = this.tempConfig.frequencyTopCount.toString();
+                
+                inputElement.addEventListener('input', (e) => {
+                    const value = parseInt((e.target as HTMLInputElement).value);
+                    if (value >= 1 && value <= 15) {
+                        this.tempConfig.frequencyTopCount = value;
+                    }
+                });
+                
+                this.frequencyTopCountContainer = null;
+                this.frequencyTopCountContainer = inputElement;
+                return inputElement;
+            }
+        });
+
+        // 频率统计天数
+        this.setting.addItem({
+            title: this.i18n.frequencyDaysRange,
+            description: this.i18n.frequencyDaysRangeTip,
+            createActionElement: () => {
+                const inputElement = document.createElement('input');
+                inputElement.className = 'b3-text-field';
+                inputElement.type = 'number';
+                inputElement.min = '1';
+                inputElement.max = '90';
+                inputElement.value = this.tempConfig.frequencyDaysRange.toString();
+                
+                inputElement.addEventListener('input', (e) => {
+                    const value = parseInt((e.target as HTMLInputElement).value);
+                    if (value >= 1 && value <= 90) {
+                        this.tempConfig.frequencyDaysRange = value;
+                    }
+                });
+                
+                this.frequencyDaysRangeContainer = null;
+                this.frequencyDaysRangeContainer = inputElement;
+                return inputElement;
+            }
+        });
+
+        // 其他自定义语言
+        this.setting.addItem({
+            title: this.i18n.otherCustomLanguages,
+            description: this.i18n.otherCustomLanguagesTip,
+            createActionElement: () => {
+                const textareaElement = document.createElement('textarea');
+                textareaElement.className = 'b3-text-field fn__block';
+                textareaElement.spellcheck = false;
+                textareaElement.rows = 4;
+                textareaElement.placeholder = this.i18n.fillList;
+                textareaElement.style.resize = 'vertical';
+                textareaElement.value = this.tempConfig.otherCustomLanguages;
+                
+                textareaElement.addEventListener('input', (e) => {
+                    this.tempConfig.otherCustomLanguages = (e.target as HTMLInputElement).value;
+                });
+                
+                return textareaElement;
+            }
+        });
+
+        // 剔除的内置语言
+        this.setting.addItem({
+            title: this.i18n.excludedLanguages,
+            description: this.i18n.excludedLanguagesTip,
+            direction: 'row',
+            createActionElement: () => {
+                const container = document.createElement('div');
+
+                const textareaElement = document.createElement('textarea');
+                textareaElement.className = 'b3-text-field fn__block';
+                textareaElement.spellcheck = false;
+                textareaElement.rows = 4;
+                textareaElement.placeholder = this.i18n.fillList;
+                textareaElement.style.resize = 'vertical';
+                textareaElement.value = this.tempConfig.excludedLanguages;
+                
+                const hrButton = document.createElement('div');
+                hrButton.className = 'fn__hr';
+                
+                const fillButton = document.createElement('button');
+                fillButton.className = 'b3-button b3-button--outline fn__size200 fn__flex-center';
+                fillButton.style.display = 'flex';
+                fillButton.style.marginLeft = 'auto';
+                fillButton.textContent = this.i18n.fillAllBuiltinLanguages;
+                fillButton.addEventListener('click', () => {
+                    const builtinLanguages = this.getBuiltinLanguages();
+                    textareaElement.value = builtinLanguages.join(', ');
+                    textareaElement.focus();
+                });
+                
+                textareaElement.addEventListener('input', (e) => {
+                    this.tempConfig.excludedLanguages = (e.target as HTMLInputElement).value;
+                });
+                
+                container.appendChild(textareaElement);
+                container.appendChild(hrButton);
+                container.appendChild(fillButton);
+                
+                return container;
+            }
+        });
+    }
+
+    /**
+     * 更新设置界面配置项可见性
+     */
+    private updateSettingsVisibility(): void {
+        const isCustomMode = this.tempConfig.sortMode === 'custom';
+        
+        const customOrderContainerLabel = this.customOrderContainer?.closest('.b3-label') as HTMLElement;
+        if (customOrderContainerLabel) {
+            customOrderContainerLabel.style.display = isCustomMode ? '' : 'none';
+        }
+        
+        const frequencyTopCountContainerLabel = this.frequencyTopCountContainer?.closest('.b3-label') as HTMLElement;
+        if (frequencyTopCountContainerLabel) {
+            frequencyTopCountContainerLabel.style.display = isCustomMode ? 'none' : '';
+        }
+        
+        const frequencyDaysRangeContainerLabel = this.frequencyDaysRangeContainer?.closest('.b3-label') as HTMLElement;
+        if (frequencyDaysRangeContainerLabel) {
+            frequencyDaysRangeContainerLabel.style.display = isCustomMode ? 'none' : '';
+        }
     }
 }
